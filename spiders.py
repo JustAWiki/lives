@@ -7,13 +7,19 @@ import sys
 import datetime
 import time
 import urllib
-
+from random import randint
 
 proxies={"https":"http://114.255.212.17:808"}
 
 no_cookie_headers={
 	"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0",
 }
+
+
+
+people_info_headers=[
+#headers with authorization and UA
+]
 
 db=sqlite3.connect("lives.db")
 cursor=db.cursor()
@@ -132,11 +138,6 @@ class Spider(object):
 
 
 
-		with open('headers.json') as f:
-			self.headers=json.loads(f.read())
-
-
-
 	def insert_new_speaker(self,data):
 
 		# if not self.lives_whether_updated_today and (time.strftime('%H:%M',time.localtime(time.time()))>time.strftime('%H:%M',(2019,2,1,22,20,0,0,0,0)) and time.strftime('%H:%M',time.localtime(time.time()))<time.strftime('%H:%M',(2019,2,1,23,40,0,0,0,0))):
@@ -146,10 +147,10 @@ class Spider(object):
 			self.speaker_id.append(data['speaker']['member']['id'])
 		if 'cospeakers' in data.keys():
 			for cospeaker in data['cospeakers']:
-				if cospeaker['id'] not in self.speaker_id:
-					sql="insert into speakers values('%s','%s','%s')"%(cospeaker['id'],cospeaker['url_token'],cospeaker['name'])
+				if cospeaker['member']['id'] not in self.speaker_id:
+					sql="insert into speakers values('%s','%s','%s')"%(cospeaker['member']['id'],cospeaker['member']['url_token'],cospeaker['member']['name'])
 					db.execute(sql)
-					self.speaker_id.append(cospeaker['id'])
+					self.speaker_id.append(cospeaker['member']['id'])
 
 
 
@@ -174,7 +175,6 @@ class Spider(object):
 					while not datas['paging']['is_end'] and 'error' not in datas.keys():
 						url=datas['paging']['next']
 						for data in datas['data']:
-
 							if data['id'] not in self.lives_id_temp_1:
 								sql_1="insert into lives_id_temp_1 values('%s')"%data['id']
 								cursor.execute(sql_1)
@@ -502,17 +502,23 @@ class Spider(object):
 		try:
 			if not self.speakers_whether_updated_today  and (time.strftime('%H:%M',time.localtime(time.time()))>time.strftime('%H:%M',(2019,2,1,2,30,0,0,0,0)) and time.strftime('%H:%M',time.localtime(time.time()))<time.strftime('%H:%M',(2019,2,1,6,0,0,0,0,0))):
 				for speaker_id in self.speaker_id:
-					# print(speaker_id)
 					if speaker_id not in self.speakers_already_update_today:
+						print(speaker_id)
 						url="https://api.zhihu.com/people/%s"%speaker_id
-						data=requests.get(url,headers=self.headers,proxies=proxies).json()
-						if 'error' not in data.keys():
-							sql_1="insert into speakers_changed values('%s',%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,datetime('now','localtime'))"%(speaker_id,data['shared_count'],data['voteup_count'],data['favorited_count'],data['follower_count'],data['thanked_count'],data['hosted_live_count'],data['answer_count'],data['columns_count'],data['articles_count'],data['favorite_count'],data['following_topic_count'],data['question_count'],data['pins_count'],data['following_count'],data['following_columns_count'],data['following_question_count'],data['following_favlists_count'])
-							db.execute(sql_1)
-							sql_2="insert into speakers_changed_temp values('%s')"%speaker_id
-							db.execute(sql_2)
-							self.speakers_already_update_today.append(speaker_id)
-							db.commit()
+						index=randint(0,len(people_info_headers)-1)
+						headers=people_info_headers[index]
+						data=requests.get(url,headers=headers).json()
+						while 'error' in data.keys():
+							people_info_headers.pop(index)
+							index=randint(0,len(people_info_headers))
+							headers=people_info_headers[index]
+							data=requests.get(url,headers=headers,proxies=proxies).json()
+						sql_1="insert into speakers_changed values('%s',%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,datetime('now','localtime'))"%(speaker_id,data['shared_count'],data['voteup_count'],data['favorited_count'],data['follower_count'],data['thanked_count'],data['hosted_live_count'],data['answer_count'],data['columns_count'],data['articles_count'],data['favorite_count'],data['following_topic_count'],data['question_count'],data['pins_count'],data['following_count'],data['following_columns_count'],data['following_question_count'],data['following_favlists_count'])
+						db.execute(sql_1)
+						sql_2="insert into speakers_changed_temp values('%s')"%speaker_id
+						db.execute(sql_2)
+						self.speakers_already_update_today.append(speaker_id)
+						db.commit()
 
 				sql="insert into speakers_update_log values(datetime('now','localtime'))"
 				db.execute(sql)
